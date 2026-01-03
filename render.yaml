@@ -1,0 +1,49 @@
+services:
+  # Backend API Service
+  - type: web
+    name: medicosmart-api
+    repo: gscarfo/medicosmart-pro
+    branch: main
+    rootDirectory: backend
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - fromDatabase:
+          name: medicosmart-db
+          property: connectionString
+    preDeployCommand: npx prisma migrate deploy
+    buildCommand: npm install && npx prisma generate
+    startCommand: node src/index.js
+
+  # Frontend Static Site
+  - type: staticSite
+    name: medicosmart-frontend
+    repo: gscarfo/medicosmart-pro
+    branch: main
+    rootDirectory: frontend
+    plan: free
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: medicosmart-api
+          type: web
+          property: url
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    rewrites:
+      - source: /*
+        destination: /index.html
+
+  # PostgreSQL Database
+  - type: pserv
+    name: medicosmart-db
+    plan: free
+    databaseName: medicosmart
+    databaseUser: medicosmart
