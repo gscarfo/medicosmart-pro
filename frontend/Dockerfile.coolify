@@ -1,0 +1,38 @@
+# MedicoSmart Frontend - Dockerfile ottimizzato per Coolify
+# ========================================================
+
+# Stage 1: Builder
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copia prima i file di configurazione
+COPY package*.json ./
+
+# Installa dipendenze
+RUN npm ci
+
+# Copia tutto il codice sorgente
+COPY . .
+
+# Build produzione
+RUN npm run build
+
+# Stage 2: Produzione con Nginx
+FROM nginx:alpine AS production
+
+# Copia configurazione nginx personalizzata
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copia i file build dalla stage precedente
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Espone la porta 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+
+# Avvio Nginx
+CMD ["nginx", "-g", "daemon off;"]

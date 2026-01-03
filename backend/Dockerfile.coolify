@@ -1,0 +1,53 @@
+# MedicoSmart Backend - Dockerfile ottimizzato per Coolify
+# =======================================================
+
+# Stage 1: Builder
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copia prima i file di configurazione per sfruttare la cache Docker
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Installa dipendenze (incluse dev per generare Prisma client)
+RUN npm ci
+
+# Genera il client Prisma
+RUN npx prisma generate
+
+# Copia tutto il codice sorgente
+COPY . .
+
+# Stage 2: Produzione
+FROM node:18-alpine AS production
+
+WORKDIR /app
+
+# Installa solo le dipendenze di produzione
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copia Prisma schema e client generato
+COPY prisma ./prisma/
+
+# Copia i file dalla build
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+
+# Crea directory per upload e log
+RUN mkdir -p ./uploads/pdfs ./logs && chmod 777 ./uploads ./logs
+
+# Variabili d'ambiente
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Espone la porta
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+# Avvio dell'applicazione
+CMD ["node", "src/index.js"]

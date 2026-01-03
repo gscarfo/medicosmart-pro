@@ -1,0 +1,81 @@
+# MedicoSmart - Docker Compose Semplificato per Coolify
+# =====================================================
+# Questo file è ottimizzato per l'import diretto in Coolify
+
+version: '3.8'
+
+services:
+  # -------------------------
+  # Database PostgreSQL
+  # -------------------------
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medicosmart
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-MedicosmartSecure2024!!}
+      POSTGRES_DB: medicosmart
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medicosmart -d medicosmart"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "coolify.managed=true"
+
+  # -------------------------
+  # Backend API
+  # -------------------------
+  api:
+    image: ghcr.io/tuo-user/medicosmart-backend:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://medicosmart:${DB_PASSWORD:-MedicosmartSecure2024!!}@db:5432/medicosmart?schema=public
+      JWT_SECRET: ${JWT_SECRET:-medicosmart-super-secret-jwt-key-32chars!!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-medicosmart-refresh-token-secret-32!!}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-medicosmart-32-char-enc-key-2024!!}
+      ENCRYPTION_IV: ${ENCRYPTION_IV:-medicosmart-iv!!}
+      API_URL: https://${API_DOMAIN:-api.${DOMAIN:-parallela1.vps.webdock.cloud}}
+      FRONTEND_URL: https://${FRONTEND_DOMAIN:-medicosmart.${DOMAIN:-parallela1.vps.webdock.cloud}}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - pdf_uploads:/app/uploads
+      - api_logs:/app/logs
+    labels:
+      - "coolify.managed=true"
+
+  # -------------------------
+  # Frontend
+  # -------------------------
+  frontend:
+    image: ghcr.io/tuo-user/medicosmart-frontend:latest
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: https://${API_DOMAIN:-api.${DOMAIN:-parallela1.vps.webdock.cloud}}
+    depends_on:
+      - api
+    labels:
+      - "coolify.managed=true"
+
+# -------------------------
+# Volumi
+# -------------------------
+volumes:
+  postgres_data:
+    driver: local
+  pdf_uploads:
+    driver: local
+  api_logs:
+    driver: local

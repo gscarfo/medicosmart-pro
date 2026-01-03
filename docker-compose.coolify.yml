@@ -1,0 +1,137 @@
+# MedicoSmart Professional - Docker Compose for Coolify
+# Ottimizzato per deployment su VPS con Coolify
+# URL: https://parallela1.vps.webdock.cloud/
+
+services:
+  # ============================================
+  # DATABASE POSTGRESQL
+  # ============================================
+  db:
+    image: postgres:15-alpine
+    container_name: medicosmart-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medicosmart
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-MedicosmartSecure2024!!}
+      POSTGRES_DB: medicosmart
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medicosmart -d medicosmart"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medicosmart-network
+    labels:
+      - "coolify.managed=true"
+
+  # ============================================
+  # BACKEND API
+  # ============================================
+  api:
+    image: ghcr.io/tuo-user/medicosmart-backend:latest
+    container_name: medicosmart-api
+    restart: unless-stopped
+    environment:
+      # Server
+      NODE_ENV: production
+      PORT: 3000
+
+      # Database (Coolify gestisce automaticamente la connessione)
+      DATABASE_URL: postgresql://medicosmart:${DB_PASSWORD:-MedicosmartSecure2024!!}@db:5432/medicosmart?schema=public
+
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-medicosmart-super-secret-jwt-key-32chars!!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-medicosmart-refresh-token-secret-32!!}
+      JWT_EXPIRES_IN: 24h
+      JWT_REFRESH_EXPIRES_IN: 7d
+
+      # Encryption (IMPORTANT: Change these in production!)
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-medicosmart-32-char-enc-key-2024!!}
+      ENCRYPTION_IV: ${ENCRYPTION_IV:-medicosmart-iv!!}
+
+      # URLs
+      API_URL: https://${DOMAIN:-parallela1.vps.webdock.cloud}
+      FRONTEND_URL: https://${FRONTEND_DOMAIN:-medicosmart.parallela1.vps.webdock.cloud}
+
+      # Email (SMTP/SendGrid)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@${DOMAIN:-parallela1.vps.webdock.cloud}}
+      FROM_NAME: ${FROM_NAME:-MedicoSmart}
+
+      # SMS (Twilio)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - medicosmart-network
+    volumes:
+      - pdf_uploads:/app/uploads
+      - api_logs:/app/logs
+    labels:
+      - "coolify.managed=true"
+      - "coolify.service=api"
+
+  # ============================================
+  # FRONTEND
+  # ============================================
+  frontend:
+    image: ghcr.io/tuo-user/medicosmart-frontend:latest
+    container_name: medicosmart-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: https://${API_DOMAIN:-api.${DOMAIN:-parallela1.vps.webdock.cloud}}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - medicosmart-network
+    labels:
+      - "coolify.managed=true"
+      - "coolify.service=frontend"
+
+# ============================================
+# VOLUMI
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+    labels:
+      - "coolify.managed=true"
+  pdf_uploads:
+    driver: local
+    labels:
+      - "coolify.managed=true"
+  api_logs:
+    driver: local
+    labels:
+      - "coolify.managed=true"
+
+# ============================================
+# RETE
+# ============================================
+networks:
+  medicosmart-network:
+    driver: bridge
+    labels:
+      - "coolify.managed=true"

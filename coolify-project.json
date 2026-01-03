@@ -1,0 +1,139 @@
+{
+  "name": "MedicoSmart Professional",
+  "description": "Sistema di gestione ricettario medico digitale - Full Stack Application",
+  "services": [
+    {
+      "name": "db",
+      "image": "postgres:15-alpine",
+      "type": "postgres",
+      "environment": {
+        "POSTGRES_USER": "medicosmart",
+        "POSTGRES_PASSWORD": "${DB_PASSWORD}",
+        "POSTGRES_DB": "medicosmart"
+      },
+      "volumes": [
+        {
+          "name": "postgres_data",
+          "path": "/var/lib/postgresql/data"
+        }
+      ],
+      "healthCheck": {
+        "test": "pg_isready -U medicosmart -d medicosmart",
+        "interval": 10,
+        "timeout": 5,
+        "retries": 5
+      }
+    },
+    {
+      "name": "api",
+      "image": "ghcr.io/tuo-user/medicosmart-backend:latest",
+      "type": "custom",
+      "dockerfile": "backend/Dockerfile.coolify",
+      "environment": {
+        "NODE_ENV": "production",
+        "PORT": "3000",
+        "DATABASE_URL": "postgresql://medicosmart:${DB_PASSWORD}@db:5432/medicosmart?schema=public",
+        "JWT_SECRET": "${JWT_SECRET}",
+        "JWT_REFRESH_SECRET": "${JWT_REFRESH_SECRET}",
+        "ENCRYPTION_KEY": "${ENCRYPTION_KEY}",
+        "ENCRYPTION_IV": "${ENCRYPTION_IV}",
+        "API_URL": "https://api.${DOMAIN}",
+        "FRONTEND_URL": "https://medicosmart.${DOMAIN}",
+        "LOG_LEVEL": "info"
+      },
+      "volumes": [
+        {
+          "name": "pdf_uploads",
+          "path": "/app/uploads"
+        },
+        {
+          "name": "api_logs",
+          "path": "/app/logs"
+        }
+      ],
+      "dependsOn": ["db"],
+      "healthCheck": {
+        "test": "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health",
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3
+      },
+      "domains": [
+        {
+          "hostname": "api.${DOMAIN}",
+          "ssl": true
+        }
+      ]
+    },
+    {
+      "name": "frontend",
+      "image": "ghcr.io/tuo-user/medicosmart-frontend:latest",
+      "type": "custom",
+      "dockerfile": "frontend/Dockerfile.coolify",
+      "environment": {
+        "VITE_API_URL": "https://api.${DOMAIN}"
+      },
+      "domains": [
+        {
+          "hostname": "medicosmart.${DOMAIN}",
+          "ssl": true
+        }
+      ],
+      "healthCheck": {
+        "test": "wget --no-verbose --tries=1 --spider http://localhost/health",
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3
+      }
+    }
+  ],
+  "networks": [
+    {
+      "name": "medicosmart-network",
+      "driver": "bridge"
+    }
+  ],
+  "variables": [
+    {
+      "name": "DB_PASSWORD",
+      "description": "Password per il database PostgreSQL",
+      "value": "MedicosmartSecure2024!!",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "JWT_SECRET",
+      "description": "Chiave segreta JWT (min 32 caratteri)",
+      "value": "medicosmart-super-secret-jwt-key-32chars!!",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "JWT_REFRESH_SECRET",
+      "description": "Chiave segreta refresh token (min 32 caratteri)",
+      "value": "medicosmart-refresh-token-secret-32!!",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "ENCRYPTION_KEY",
+      "description": "Chiave crittografia AES-256 (32 caratteri)",
+      "value": "medicosmart-32-char-enc-key-2024!!",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "ENCRYPTION_IV",
+      "description": "IV crittografia (16 caratteri)",
+      "value": "medicosmart-iv!!",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "DOMAIN",
+      "description": "Dominio principale della VPS",
+      "value": "parallela1.vps.webdock.cloud",
+      "required": true
+    }
+  ]
+}
